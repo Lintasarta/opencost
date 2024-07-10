@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/opencost/opencost/core/pkg/filter/allocation"
+	"github.com/opencost/opencost/core/pkg/filter/ast"
 	"github.com/opencost/opencost/pkg/cloud/provider"
 	"github.com/patrickmn/go-cache"
 	prometheusClient "github.com/prometheus/client_golang/api"
@@ -86,6 +88,8 @@ type Aggregation struct {
 	TotalCost                  float64                        `json:"totalCost"`
 	TotalCostVector            []*util.Vector                 `json:"totalCostVector,omitempty"`
 }
+
+var parser ast.FilterParser = allocation.NewAllocationFilterParser()
 
 // TotalHours determines the amount of hours the Aggregation covers, as a
 // function of the cost vectors and the resolution of those vectors' data
@@ -2284,7 +2288,10 @@ func (a *Accesses) ComputeAllocationHandler(w http.ResponseWriter, r *http.Reque
 	// include aggregated labels/annotations if true
 	includeAggregatedMetadata := qp.GetBool("includeAggregatedMetadata", false)
 
-	asr, err := a.Model.QueryAllocation(window, resolution, step, aggregateBy, includeIdle, idleByNode, includeProportionalAssetResourceCosts, includeAggregatedMetadata, sharedLoadBalancer, accumulateBy)
+	filterString := qp.Get("filter", "")
+	filter, err := parser.Parse(filterString)
+
+	asr, err := a.Model.QueryAllocation(window, resolution, step, aggregateBy, includeIdle, idleByNode, includeProportionalAssetResourceCosts, includeAggregatedMetadata, sharedLoadBalancer, accumulateBy, filter)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "bad request") {
 			WriteError(w, BadRequest(err.Error()))
